@@ -265,7 +265,6 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
 PVideoFrame FTurn::GetFrame(int n, IScriptEnvironment* env) {
     PVideoFrame src = child->GetFrame(n,env);
     auto dst = env->NewVideoFrame(vi);
-    memset(buffer, 0, vi.width*vi.height);
     if (!chroma_) {
         turnFunction_(dst->GetWritePtr(PLANAR_Y), src->GetReadPtr(PLANAR_Y), buffer, src->GetRowSize(PLANAR_Y), src->GetHeight(PLANAR_Y), dst->GetPitch(PLANAR_Y), src->GetPitch(PLANAR_Y));
     } else {
@@ -295,12 +294,12 @@ PVideoFrame FTurn::GetFrame(int n, IScriptEnvironment* env) {
 }
 
 AVSValue __cdecl CreateFTurnLeft(AVSValue args, void*, IScriptEnvironment* env) {
-    enum { CLIP, MT, CHROMA };
+    enum { CLIP, CHROMA, MT };
     return new FTurn(args[CLIP].AsClip(), TurnDirection::LEFT, args[CHROMA].AsBool(true), args[MT].AsBool(true), env);
 }
 
 AVSValue __cdecl CreateFTurnRight(AVSValue args, void*, IScriptEnvironment* env) {
-    enum { CLIP, MT, CHROMA };
+    enum { CLIP, CHROMA, MT };
     return new FTurn(args[CLIP].AsClip(), TurnDirection::RIGHT, args[CHROMA].AsBool(true), args[MT].AsBool(true), env);
 }
 
