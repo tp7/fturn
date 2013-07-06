@@ -305,7 +305,7 @@ AVSValue __cdecl CreateFTurnRight(AVSValue args, void*, IScriptEnvironment* env)
 }
 
 extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit2(IScriptEnvironment* env) {
-    env->AddFunction("fturnleft", "c[mt]b[chroma]b", CreateFTurnLeft, 0);
-    env->AddFunction("fturnright", "c[mt]b[chroma]b", CreateFTurnRight, 0);
+    env->AddFunction("fturnleft", "c[chroma]b[mt]b", CreateFTurnLeft, 0);
+    env->AddFunction("fturnright", "c[chroma]b[mt]b", CreateFTurnRight, 0);
     return "Why are you looking at this?";
 }
