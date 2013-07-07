@@ -1,7 +1,14 @@
 #include <future>
 #include <Windows.h>
 #pragma warning(disable: 4512 4244 4100)
-#include "avisynth.h"
+#if defined(FILTER_AVS_25)
+#include "avisynth-2_5.h"
+#elif defined(FILTER_AVS_26)
+#include <windows.h>
+#include "avisynth-2_6.h"
+#else
+#error FILTER_AVS_2x not defined
+#endif
 #pragma warning(default: 4512 4244 4100)
 #include <tmmintrin.h>
 using namespace std;
@@ -10,6 +17,25 @@ enum class TurnDirection {
     LEFT,
     RIGHT
 };
+
+bool isSupportedColorspace(int pixelType) {
+    if (pixelType == VideoInfo::CS_YV12 || pixelType == VideoInfo::CS_I420) {
+        return true;
+    }
+#if defined(FILTER_AVS_26) 
+    if (pixelType == VideoInfo::CS_YV24 || pixelType == VideoInfo::CS_Y8) {
+        return true;
+    }
+#endif
+    return false;
+}
+
+bool hasChroma(int pixelType) {
+#if defined(FILTER_AVS_26) 
+    return pixelType != VideoInfo::CS_Y8;
+#endif
+    return true;
+}
 
 #define FTURN_TRANSPOSE(src1, src2, src3, src4, src5, src6, src7, src8, mask) \
 auto a = _mm_unpacklo_epi8((src1), (src1)); \
@@ -48,14 +74,14 @@ auto a5b5c5d5e5f5g5h5 = _mm_unpackhi_epi64(a45b45c45d45, e45f45g45h45); \
 auto a6b6c6d6e6f6g6h6 = _mm_unpacklo_epi64(a67b67c67d67, e67f67g67h67); \
 auto a7b7c7d7e7f7g7h7 = _mm_unpackhi_epi64(a67b67c67d67, e67f67g67h67); \
     \
-(src1) = _mm_shuffle_epi8(a0b0c0d0e0f0g0h0, mask); \
-(src2) = _mm_shuffle_epi8(a1b1c1d1e1f1g1h1, mask); \
-(src3) = _mm_shuffle_epi8(a2b2c2d2e2f2g2h2, mask); \
-(src4) = _mm_shuffle_epi8(a3b3c3d3e3f3g3h3, mask); \
-(src5) = _mm_shuffle_epi8(a4b4c4d4e4f4g4h4, mask); \
-(src6) = _mm_shuffle_epi8(a5b5c5d5e5f5g5h5, mask); \
-(src7) = _mm_shuffle_epi8(a6b6c6d6e6f6g6h6, mask); \
-(src8) = _mm_shuffle_epi8(a7b7c7d7e7f7g7h7, mask);
+(src1) = _mm_shuffle_epi8(a0b0c0d0e0f0g0h0, (mask)); \
+(src2) = _mm_shuffle_epi8(a1b1c1d1e1f1g1h1, (mask)); \
+(src3) = _mm_shuffle_epi8(a2b2c2d2e2f2g2h2, (mask)); \
+(src4) = _mm_shuffle_epi8(a3b3c3d3e3f3g3h3, (mask)); \
+(src5) = _mm_shuffle_epi8(a4b4c4d4e4f4g4h4, (mask)); \
+(src6) = _mm_shuffle_epi8(a5b5c5d5e5f5g5h5, (mask)); \
+(src7) = _mm_shuffle_epi8(a6b6c6d6e6f6g6h6, (mask)); \
+(src8) = _mm_shuffle_epi8(a7b7c7d7e7f7g7h7, (mask));
 
 
 void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
@@ -241,53 +267,61 @@ private:
 
 FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env) 
     : GenericVideoFilter(child), chroma_(chroma), mt_(mt), buffer(nullptr), bufferUV(nullptr) {
-        if (!child->GetVideoInfo().IsYV12()) {
-            env->ThrowError("Only YV12 is supported!");
-        }
+    if (!isSupportedColorspace(vi.pixel_type)) {
+        env->ThrowError("Only YV12, YV24 and Y8 colorspaces are supported.");
+    }
 
-        int CPUInfo[4]; //eax, ebx, ecx, edx
-        __cpuid(CPUInfo, 1);
+    int CPUInfo[4]; //eax, ebx, ecx, edx
+    __cpuid(CPUInfo, 1);
 
-        if (!(CPUInfo[2] & 0x00000200)) {
-            env->ThrowError("Sorry, SSSE3 is required");
-        }
-        
-        vi.width = child->GetVideoInfo().height;
-        vi.height = child->GetVideoInfo().width;
-        turnFunction_ = direction == TurnDirection::RIGHT ? turnPlaneRight : turnPlaneLeft;
-        buffer = new BYTE[vi.width*vi.height];
+    if (!(CPUInfo[2] & 0x00000200)) {
+        env->ThrowError("Sorry, SSSE3 is required");
+    }
 
-        if (mt_) {
-            bufferUV = new BYTE[vi.width*vi.height]; //to handle yv24 correctly
-        }
+    vi.width = child->GetVideoInfo().height;
+    vi.height = child->GetVideoInfo().width;
+
+    turnFunction_ = direction == TurnDirection::RIGHT ? turnPlaneRight : turnPlaneLeft;
+    buffer = new BYTE[vi.width*vi.height];
+
+    if (mt_) {
+        bufferUV = new BYTE[vi.width*vi.height];
+    }
 }
 
 PVideoFrame FTurn::GetFrame(int n, IScriptEnvironment* env) {
     PVideoFrame src = child->GetFrame(n,env);
     auto dst = env->NewVideoFrame(vi);
-    if (!chroma_) {
-        turnFunction_(dst->GetWritePtr(PLANAR_Y), src->GetReadPtr(PLANAR_Y), buffer, src->GetRowSize(PLANAR_Y), src->GetHeight(PLANAR_Y), dst->GetPitch(PLANAR_Y), src->GetPitch(PLANAR_Y));
-    } else {
-        auto dstp_u = dst->GetWritePtr(PLANAR_U);
-        auto dstp_v = dst->GetWritePtr(PLANAR_V);
-        auto srcp_u = src->GetReadPtr(PLANAR_U);
-        auto srcp_v = src->GetReadPtr(PLANAR_V);
-        auto src_width_uv = src->GetRowSize(PLANAR_U);
-        auto src_height_uv = src->GetHeight(PLANAR_U);
-        auto src_pitch_uv = src->GetPitch(PLANAR_U);
-        auto dst_pitch_uv = dst->GetPitch(PLANAR_U);
+    auto pSrcY = src->GetReadPtr(PLANAR_Y);
+    auto pDstY = dst->GetWritePtr(PLANAR_Y);
+    int srcPitchY = src->GetPitch(PLANAR_Y);
+    int dstPitchY = dst->GetPitch(PLANAR_Y);
+    int srcWidthY = src->GetRowSize(PLANAR_Y);
+    int srcHeightY = src->GetHeight(PLANAR_Y);
 
+    if (!(chroma_ && hasChroma(vi.pixel_type))) {
+        turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+    } else {
+        auto pDstU = dst->GetWritePtr(PLANAR_U);
+        auto pDstV = dst->GetWritePtr(PLANAR_V);
+        auto pSrcU = src->GetReadPtr(PLANAR_U);
+        auto pSrcV = src->GetReadPtr(PLANAR_V);
+        int srcPitchUV = src->GetPitch(PLANAR_U);
+        int dstPitchUV = dst->GetPitch(PLANAR_U);
+        int srcWidthUV = src->GetRowSize(PLANAR_U);
+        int srcHeightUV = src->GetHeight(PLANAR_V);
+        
         if (mt_) {
             auto thread2 = std::async(launch::async, [=] { 
-                turnFunction_(dstp_u, srcp_u, bufferUV, src_width_uv, src_height_uv, dst_pitch_uv, src_pitch_uv);
-                turnFunction_(dstp_v, srcp_v, bufferUV, src_width_uv, src_height_uv, dst_pitch_uv, src_pitch_uv);
+                turnFunction_(pDstU, pSrcU, bufferUV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+                turnFunction_(pDstV, pSrcV, bufferUV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
             });
-            turnFunction_(dst->GetWritePtr(PLANAR_Y), src->GetReadPtr(PLANAR_Y), buffer, src->GetRowSize(PLANAR_Y), src->GetHeight(PLANAR_Y), dst->GetPitch(PLANAR_Y), src->GetPitch(PLANAR_Y));
+            turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
             thread2.wait();
         } else {
-            turnFunction_(dstp_u, srcp_u, buffer, src_width_uv, src_height_uv, dst_pitch_uv, src_pitch_uv);
-            turnFunction_(dstp_v, srcp_v, buffer, src_width_uv, src_height_uv, dst_pitch_uv, src_pitch_uv);
-            turnFunction_(dst->GetWritePtr(PLANAR_Y), src->GetReadPtr(PLANAR_Y), buffer, src->GetRowSize(PLANAR_Y), src->GetHeight(PLANAR_Y), dst->GetPitch(PLANAR_Y), src->GetPitch(PLANAR_Y));
+            turnFunction_(pDstU, pSrcU, buffer, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+            turnFunction_(pDstV, pSrcV, buffer, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+            turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
         }
     }
     return dst;

@@ -20,7 +20,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="avisynth.h">
+    <ClInclude Include="avisynth-2_6.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="avisynth-2_5.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

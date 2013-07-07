@@ -46,17 +46,16 @@ enum { AVISYNTH_INTERFACE_VERSION = 2 };
    Moved from internal.h */
 
 // Win32 API macros, notably the types BYTE, DWORD, ULONG, etc. 
-#include <windef.h>  
+#include <windows.h>  
 
 // COM interface macros
 #include <objbase.h>
-
 
 // Raster types used by VirtualDub & Avisynth
 #define in64 (__int64)(unsigned short)
 typedef unsigned long	Pixel;    // this will break on 64-bit machines!
 typedef unsigned long	Pixel32;
-typedef unsigned char Pixel8;
+typedef unsigned char	Pixel8;
 typedef long			PixCoord;
 typedef	long			PixDim;
 typedef	long			PixOffset;
@@ -170,7 +169,7 @@ struct VideoInfo {
   bool Is(int property) const { return ((pixel_type & property)==property ); }
   bool IsPlanar() const { return !!(pixel_type & CS_PLANAR); }
   bool IsFieldBased() const { return !!(image_type & IT_FIELDBASED); }
-  bool IsParityKnown() const { return ((image_type & IT_FIELDBASED)&&(image_type & (IT_BFF|IT_TFF))); }
+  bool IsParityKnown() const { return ((image_type & IT_FIELDBASED)&&(image_type & (IT_BFF||IT_TFF))); }
   bool IsBFF() const { return !!(image_type & IT_BFF); }
   bool IsTFF() const { return !!(image_type & IT_TFF); }
   
@@ -178,13 +177,12 @@ struct VideoInfo {
   int BytesFromPixels(int pixels) const { return pixels * (BitsPerPixel()>>3); }   // Will not work on planar images, but will return only luma planes
   int RowSize() const { return BytesFromPixels(width); }  // Also only returns first plane on planar images
   int BMPSize() const { if (IsPlanar()) {int p = height * ((RowSize()+3) & ~3); p+=p>>1; return p;  } return height * ((RowSize()+3) & ~3); }
-  __int64 AudioSamplesFromFrames(__int64 frames) const { return HasVideo() ? ((__int64)(frames) * audio_samples_per_second * fps_denominator / fps_numerator) : 0; }
-  int FramesFromAudioSamples(__int64 samples) const { return (HasAudio()) ? (int)(samples * (__int64)fps_numerator / (__int64)fps_denominator / (__int64)audio_samples_per_second) : 0; }
-  __int64 AudioSamplesFromBytes(__int64 bytes) const { return HasAudio() ? bytes / BytesPerAudioSample() : 0; }
+  __int64 AudioSamplesFromFrames(__int64 frames) const { return ((__int64)(frames) * audio_samples_per_second * fps_denominator / fps_numerator); }
+  int FramesFromAudioSamples(__int64 samples) const { return (int)(samples * (__int64)fps_numerator / (__int64)fps_denominator / (__int64)audio_samples_per_second); }
+  __int64 AudioSamplesFromBytes(__int64 bytes) const { return bytes / BytesPerAudioSample(); }
   __int64 BytesFromAudioSamples(__int64 samples) const { return samples * BytesPerAudioSample(); }
   int AudioChannels() const { return nchannels; }
   int SampleType() const{ return sample_type;}
-  bool IsSampleType(int testtype) const{ return !!(sample_type&testtype);}
   int SamplesPerSecond() const { return audio_samples_per_second; }
   int BytesPerAudioSample() const { return nchannels*BytesPerChannelSample();}
   void SetFieldBased(bool isfieldbased)  { if (isfieldbased) image_type|=IT_FIELDBASED; else  image_type&=~IT_FIELDBASED; }
@@ -242,6 +240,24 @@ struct VideoInfo {
 
 };
 
+enum {
+  FILTER_TYPE=1,
+  FILTER_INPUT_COLORSPACE=2,
+  FILTER_OUTPUT_TYPE=9,
+  FILTER_NAME=4,
+  FILTER_AUTHOR=5,
+  FILTER_VERSION=6,
+  FILTER_ARGS=7,
+  FILTER_ARGS_INFO=8,
+  FILTER_ARGS_DESCRIPTION=10,
+  FILTER_DESCRIPTION=11,
+};
+enum {  //SUBTYPES
+  FILTER_TYPE_AUDIO=1,
+  FILTER_TYPE_VIDEO=2,
+  FILTER_OUTPUT_TYPE_SAME=3,
+  FILTER_OUTPUT_TYPE_DIFFERENT=4,
+};
 
 
 
@@ -292,8 +308,8 @@ class VideoFrame {
   const int offset, pitch, row_size, height, offsetU, offsetV, pitchUV;  // U&V offsets are from top of picture.
 
   friend class PVideoFrame;
-  void AddRef() { InterlockedIncrement((long *)&refcount); }
-  void Release() { if (refcount==1) InterlockedDecrement(&vfb->refcount); InterlockedDecrement((long *)&refcount); }
+  void AddRef() { ++refcount; }
+  void Release() { if (refcount==1) --vfb->refcount; --refcount; }
 
   friend class ScriptEnvironment;
   friend class Cache;
@@ -301,7 +317,7 @@ class VideoFrame {
   VideoFrame(VideoFrameBuffer* _vfb, int _offset, int _pitch, int _row_size, int _height);
   VideoFrame(VideoFrameBuffer* _vfb, int _offset, int _pitch, int _row_size, int _height, int _offsetU, int _offsetV, int _pitchUV);
 
-  void* operator new(unsigned size);
+  void* operator new (size_t size);
 // TESTME: OFFSET U/V may be switched to what could be expected from AVI standard!
 public:
   int GetPitch() const { return pitch; }
@@ -361,15 +377,13 @@ public:
     return vfb->data + GetOffset(plane);
   }
 
-  ~VideoFrame() { InterlockedDecrement(&vfb->refcount); }
+  ~VideoFrame() { --vfb->refcount; }
 };
 
 enum {
   CACHE_NOTHING=0,
   CACHE_RANGE=1,
   CACHE_ALL=2,
-  CACHE_AUDIO=3,
-  CACHE_AUDIO_NONE=4
  };
 
 // Base class for all filters.
@@ -377,8 +391,8 @@ class IClip {
   friend class PClip;
   friend class AVSValue;
   int refcnt;
-  void AddRef() { InterlockedIncrement((long *)&refcnt); }
-  void Release() { InterlockedDecrement((long *)&refcnt); if (!refcnt) delete this; }
+  void AddRef() { ++refcnt; }
+  void Release() { if (!--refcnt) delete this; }
 public:
   IClip() : refcnt(0) {}
 
@@ -504,7 +518,6 @@ public:
   const char* AsString(const char* def) const { _ASSERTE(IsString()||!Defined()); return IsString() ? string : def; }
 
   int ArraySize() const { _ASSERTE(IsArray()); return IsArray()?array_size:1; }
-
   const AVSValue& operator[](int index) const {
     _ASSERTE(IsArray() && index>=0 && index<array_size);
     return (IsArray() && index>=0 && index<array_size) ? array[index] : *this;
@@ -594,17 +607,13 @@ public:
   static PClip Create(PClip clip, int sample_type, int prefered_type);
   static AVSValue __cdecl Create_float(AVSValue args, void*, IScriptEnvironment*);
   static AVSValue __cdecl Create_32bit(AVSValue args, void*, IScriptEnvironment*);
-  static AVSValue __cdecl Create_24bit(AVSValue args, void*, IScriptEnvironment*);
   static AVSValue __cdecl Create_16bit(AVSValue args, void*, IScriptEnvironment*);
   static AVSValue __cdecl Create_8bit(AVSValue args, void*, IScriptEnvironment*);
-  virtual ~ConvertAudio();
-
+  virtual ~ConvertAudio()
+  {if (tempbuffer_size) {delete[] tempbuffer;tempbuffer_size=0;}}
 private:
   void convertToFloat(char* inbuf, float* outbuf, char sample_type, int count);
-  void convertToFloat_3DN(char* inbuf, float* outbuf, char sample_type, int count);
   void convertFromFloat(float* inbuf, void* outbuf, char sample_type, int count);
-  void convertFromFloat_3DN(float* inbuf, void* outbuf, char sample_type, int count);
-  void convertFromFloat_SSE(float* inbuf, void* outbuf, char sample_type, int count);
 
   __inline int Saturate_int8(float n);
   __inline short Saturate_int16(float n);
@@ -635,7 +644,7 @@ enum {
                               //         will have anyway)
 };
 #define MAX_INT 0x7fffffff
-#define MIN_INT -0x7fffffff
+#define MIN_INT 0x80000000
 
 
 
@@ -680,7 +689,6 @@ public:
   virtual void __stdcall CheckVersion(int version = AVISYNTH_INTERFACE_VERSION) = 0;
 
   virtual PVideoFrame __stdcall Subframe(PVideoFrame src, int rel_offset, int new_pitch, int new_row_size, int new_height) = 0;
-  virtual PVideoFrame __stdcall Subframe(PVideoFrame src, int rel_offset, int new_pitch, int new_row_size, int new_height, int rel_offsetU, int rel_offsetV, int pitchUV) = 0;
 
 	virtual int __stdcall SetMemoryMax(int mem) = 0;
 
