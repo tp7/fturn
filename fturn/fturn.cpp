@@ -30,6 +30,13 @@ bool isSupportedColorspace(int pixelType) {
     return false;
 }
 
+const char* getUnsupportedColorspaceMessage() {
+#if defined(FILTER_AVS_26) 
+    return "Only YV12, YV24 and Y8 colorspaces are supported.";
+#endif
+    return "Only YV12 colorspace is supported.";
+}
+
 bool hasChroma(int pixelType) {
 #if defined(FILTER_AVS_26) 
     return pixelType != VideoInfo::CS_Y8;
@@ -268,7 +275,7 @@ private:
 FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env) 
     : GenericVideoFilter(child), chroma_(chroma), mt_(mt), buffer(nullptr), bufferUV(nullptr) {
     if (!isSupportedColorspace(vi.pixel_type)) {
-        env->ThrowError("Only YV12, YV24 and Y8 colorspaces are supported.");
+        env->ThrowError(getUnsupportedColorspaceMessage());
     }
 
     int CPUInfo[4]; //eax, ebx, ecx, edx
