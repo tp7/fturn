@@ -15,7 +15,8 @@ using namespace std;
 
 enum class TurnDirection {
     LEFT,
-    RIGHT
+    RIGHT,
+    TURN180
 };
 
 bool isSupportedColorspace(int pixelType) {
@@ -255,6 +256,40 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
     }
 }
 
+void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
+    BYTE* pDst2 = pDst;
+    const BYTE* pSrc2 = pSrc;
+    int srcWidthMod16 = (srcWidth / 16) * 16;
+
+    auto mask = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    pDst += dstPitch * (srcHeight-1) + srcWidth - 16;
+    for(int y = 0; y < srcHeight; ++y)
+    {
+        for (int x = 0; x < srcWidthMod16; x+=16)
+        {
+            auto src = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pSrc+x));
+
+            auto result = _mm_shuffle_epi8(src, mask);
+
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(pDst-x), result);
+        }
+        pSrc += srcPitch;
+        pDst -= dstPitch;
+    }
+    if (srcWidthMod16 != srcWidth) {
+        pSrc = pSrc2;
+        pDst = pDst2 + dstPitch * (srcHeight-1) + srcWidth - 1;
+
+        for (int y = 0; y < srcHeight; ++y) {
+            for (int x = srcWidthMod16; x < srcWidth; ++x) {
+                pDst[-x] = pSrc[x];
+            }
+            pSrc += srcPitch;
+            pDst -= dstPitch;
+        }
+    }
+}
+
 class FTurn : public GenericVideoFilter {
 public:
     FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env);
@@ -285,14 +320,19 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
         env->ThrowError("Sorry, SSSE3 is required");
     }
 
-    vi.width = child->GetVideoInfo().height;
-    vi.height = child->GetVideoInfo().width;
+    if (direction == TurnDirection::RIGHT || direction == TurnDirection::LEFT) {
+        vi.width = child->GetVideoInfo().height;
+        vi.height = child->GetVideoInfo().width;
 
-    turnFunction_ = direction == TurnDirection::RIGHT ? turnPlaneRight : turnPlaneLeft;
-    buffer = new BYTE[vi.width*vi.height];
+        turnFunction_ = direction == TurnDirection::RIGHT ? turnPlaneRight : turnPlaneLeft;
 
-    if (mt_) {
-        bufferUV = new BYTE[vi.width*vi.height];
+        buffer = new BYTE[vi.width*vi.height];
+
+        if (mt_) {
+            bufferUV = new BYTE[vi.width*vi.height];
+        }
+    } else {
+        turnFunction_ = turnPlane180;
     }
 }
 
@@ -344,8 +384,14 @@ AVSValue __cdecl CreateFTurnRight(AVSValue args, void*, IScriptEnvironment* env)
     return new FTurn(args[CLIP].AsClip(), TurnDirection::RIGHT, args[CHROMA].AsBool(true), args[MT].AsBool(true), env);
 }
 
+AVSValue __cdecl CreateFTurn180(AVSValue args, void*, IScriptEnvironment* env) {
+    enum { CLIP, CHROMA };
+    return new FTurn(args[CLIP].AsClip(), TurnDirection::TURN180, args[CHROMA].AsBool(true), false, env);
+}
+
 extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit2(IScriptEnvironment* env) {
     env->AddFunction("fturnleft", "c[chroma]b[mt]b", CreateFTurnLeft, 0);
     env->AddFunction("fturnright", "c[chroma]b[mt]b", CreateFTurnRight, 0);
+    env->AddFunction("fturn180", "c[chroma]b", CreateFTurn180, 0);
     return "Why are you looking at this?";
 }
