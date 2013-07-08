@@ -1,12 +1,13 @@
 ## fturn. ##
 
 ### What ###
-Fast implementation of TurnLeft() and TurnRight() AviSynth functions.
+Fast implementation of TurnLeft(), TurnRight() and Turn180() AviSynth functions.
 
 ### How ###
 ```
 FTurnLeft(chroma=true, mt=true)
 FTurnRight(chroma=true, mt=true)
+FTurn180(chroma=true)
 ```
 
 ### Why ###
