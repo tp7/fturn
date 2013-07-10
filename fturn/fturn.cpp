@@ -361,7 +361,6 @@ public:
     PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env);
 
     ~FTurn() {
-        delete [] buffer;
     }
 
 private:
