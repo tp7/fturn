@@ -374,7 +374,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
 GenericVideoFilter(child),
 chroma_(chroma),
 mt_(mt),
-buffer(child->GetVideoInfo().height*(child->GetVideoInfo().width+16)),
+buffer(child->GetVideoInfo().height*(child->GetVideoInfo().width+16))
 {
     if (!isSupportedColorspace(vi.pixel_type)) {
         env->ThrowError(getUnsupportedColorspaceMessage());
