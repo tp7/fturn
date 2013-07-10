@@ -11,6 +11,7 @@
 #endif
 #pragma warning(default: 4512 4244 4100)
 #include <tmmintrin.h>
+#include <mutex>
 using namespace std;
 
 namespace {
@@ -374,7 +375,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
 GenericVideoFilter(child),
 chroma_(chroma),
 mt_(mt),
-buffer(child->GetVideoInfo().height*(child->GetVideoInfo().width+16))
+buffer((child->GetVideoInfo().height+16)*(child->GetVideoInfo().width+16))
 {
     if (!isSupportedColorspace(vi.pixel_type)) {
         env->ThrowError(getUnsupportedColorspaceMessage());
