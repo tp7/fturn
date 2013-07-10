@@ -368,7 +368,7 @@ private:
     bool chroma_;
     bool mt_;
     decltype(&turnPlaneLeft) turnFunction_;
-    Array<BYTE> buffer;
+    DynamicBuffer<BYTE> buffer;
 };
 
 FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env):
