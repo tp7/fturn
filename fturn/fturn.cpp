@@ -12,6 +12,7 @@
 #pragma warning(default: 4512 4244 4100)
 #include <tmmintrin.h>
 #include <mutex>
+#include <stack>
 using namespace std;
 
 namespace {
