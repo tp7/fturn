@@ -11,7 +11,73 @@
 #endif
 #pragma warning(default: 4512 4244 4100)
 #include <tmmintrin.h>
+#include <mutex>
+#include <stack>
 using namespace std;
+
+namespace {
+
+    template <class T>
+    class ArrayAccessor;
+
+    template <class T>
+    class Array {
+    public:
+        T* ptr;
+
+        Array(int size)
+        {
+            ptr = new T[size];
+        }
+
+        Array():
+            ptr(nullptr)
+        {};
+
+        ~Array(){
+            if(ptr!=nullptr) delete [] ptr;
+        }
+
+        Array(Array<T>&& a):
+            ptr(a.ptr)
+        {
+            a.ptr = nullptr;
+        }
+
+        Array<T>& operator=(Array<T>&& a){
+            ptr = a.ptr;
+            a.ptr = nullptr;
+            return *this;
+        }
+    };
+
+    template <class T>
+    class DynamicBuffer {
+    private:
+        mutable std::mutex m;
+        int size;
+        std::stack<Array<T>> stack;
+    public:
+        DynamicBuffer(int size_):
+            size(size_)
+        {};
+
+        Array<T> Acquire(){
+            std::lock_guard<std::mutex> lock(m);
+            if(!stack.empty()){
+                Array<T> a = std::move(stack.top());
+                stack.pop();
+                return a;
+            } else {
+                return Array<T>(size);
+            }
+        }
+
+        void Release(Array<T>& v){
+            std::lock_guard<std::mutex> lock(m);
+            stack.push(std::move(v));
+        }
+    };
 
 enum class TurnDirection {
     LEFT,
@@ -23,7 +89,7 @@ bool isSupportedColorspace(int pixelType) {
     if (pixelType == VideoInfo::CS_YV12 || pixelType == VideoInfo::CS_I420) {
         return true;
     }
-#if defined(FILTER_AVS_26) 
+#if defined(FILTER_AVS_26)
     if (pixelType == VideoInfo::CS_YV24 || pixelType == VideoInfo::CS_Y8) {
         return true;
     }
@@ -32,14 +98,14 @@ bool isSupportedColorspace(int pixelType) {
 }
 
 const char* getUnsupportedColorspaceMessage() {
-#if defined(FILTER_AVS_26) 
+#if defined(FILTER_AVS_26)
     return "Only YV12, YV24 and Y8 colorspaces are supported.";
 #endif
     return "Only YV12 colorspace is supported.";
 }
 
 bool hasChroma(int pixelType) {
-#if defined(FILTER_AVS_26) 
+#if defined(FILTER_AVS_26)
     return pixelType != VideoInfo::CS_Y8;
 #endif
     return true;
@@ -267,11 +333,11 @@ void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeig
     {
         for (int x = 0; x < srcWidthMod16; x+=16)
         {
-            auto src = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pSrc+x));
+            auto src = _mm_load_si128(reinterpret_cast<const __m128i*>(pSrc+x));
 
             auto result = _mm_shuffle_epi8(src, mask);
 
-            _mm_storeu_si128(reinterpret_cast<__m128i*>(pDst-x), result);
+            _mm_store_si128(reinterpret_cast<__m128i*>(pDst-x), result);
         }
         pSrc += srcPitch;
         pDst -= dstPitch;
@@ -289,26 +355,28 @@ void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeig
         }
     }
 }
-
+}
 class FTurn : public GenericVideoFilter {
 public:
     FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env);
     PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env);
 
     ~FTurn() {
-        delete [] buffer;
     }
 
 private:
     bool chroma_;
     bool mt_;
     decltype(&turnPlaneLeft) turnFunction_;
-    BYTE *buffer;
-    BYTE *bufferUV;
+    DynamicBuffer<BYTE> buffer;
 };
 
-FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env) 
-    : GenericVideoFilter(child), chroma_(chroma), mt_(mt), buffer(nullptr), bufferUV(nullptr) {
+FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env):
+GenericVideoFilter(child),
+chroma_(chroma),
+mt_(mt),
+buffer((child->GetVideoInfo().height+16)*(child->GetVideoInfo().width+16))
+{
     if (!isSupportedColorspace(vi.pixel_type)) {
         env->ThrowError(getUnsupportedColorspaceMessage());
     }
@@ -326,11 +394,6 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
 
         turnFunction_ = direction == TurnDirection::RIGHT ? turnPlaneRight : turnPlaneLeft;
 
-        buffer = new BYTE[vi.width*vi.height];
-
-        if (mt_) {
-            bufferUV = new BYTE[vi.width*vi.height];
-        }
     } else {
         turnFunction_ = turnPlane180;
     }
@@ -347,7 +410,9 @@ PVideoFrame FTurn::GetFrame(int n, IScriptEnvironment* env) {
     int srcHeightY = src->GetHeight(PLANAR_Y);
 
     if (!(chroma_ && hasChroma(vi.pixel_type))) {
-        turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+        Array<BYTE> b = buffer.Acquire();
+        turnFunction_(pDstY, pSrcY, b.ptr, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+        buffer.Release(b);
     } else {
         auto pDstU = dst->GetWritePtr(PLANAR_U);
         auto pDstV = dst->GetWritePtr(PLANAR_V);
@@ -357,18 +422,24 @@ PVideoFrame FTurn::GetFrame(int n, IScriptEnvironment* env) {
         int dstPitchUV = dst->GetPitch(PLANAR_U);
         int srcWidthUV = src->GetRowSize(PLANAR_U);
         int srcHeightUV = src->GetHeight(PLANAR_V);
-        
+
         if (mt_) {
-            auto thread2 = std::async(launch::async, [=] { 
-                turnFunction_(pDstU, pSrcU, bufferUV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
-                turnFunction_(pDstV, pSrcV, bufferUV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+            auto thread2 = std::async(launch::async, [=] {
+                Array<BYTE> b = buffer.Acquire();
+                turnFunction_(pDstU, pSrcU, b.ptr, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+                turnFunction_(pDstV, pSrcV, b.ptr, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+                buffer.Release(b);
             });
-            turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+            Array<BYTE> b = buffer.Acquire();
+            turnFunction_(pDstY, pSrcY, b.ptr, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+            buffer.Release(b);
             thread2.wait();
         } else {
-            turnFunction_(pDstU, pSrcU, buffer, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
-            turnFunction_(pDstV, pSrcV, buffer, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
-            turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+            Array<BYTE> b = buffer.Acquire();
+            turnFunction_(pDstU, pSrcU, b.ptr, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+            turnFunction_(pDstV, pSrcV, b.ptr, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+            turnFunction_(pDstY, pSrcY, b.ptr, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+            buffer.Release(b);
         }
     }
     return dst;
