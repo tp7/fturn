@@ -389,9 +389,17 @@ AVSValue __cdecl CreateFTurn180(AVSValue args, void*, IScriptEnvironment* env) {
     return new FTurn(args[CLIP].AsClip(), TurnDirection::TURN180, args[CHROMA].AsBool(true), false, env);
 }
 
+#ifdef FILTER_AVS_25
 extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit2(IScriptEnvironment* env) {
-    env->AddFunction("fturnleft", "c[chroma]b[mt]b", CreateFTurnLeft, 0);
-    env->AddFunction("fturnright", "c[chroma]b[mt]b", CreateFTurnRight, 0);
-    env->AddFunction("fturn180", "c[chroma]b", CreateFTurn180, 0);
-    return "Why are you looking at this?";
+#else
+const AVS_Linkage *AVS_linkage = nullptr;
+
+extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit3(IScriptEnvironment* env, const AVS_Linkage* const vectors) {
+
+        AVS_linkage = vectors;
+#endif
+        env->AddFunction("fturnleft", "c[chroma]b[mt]b", CreateFTurnLeft, 0);
+        env->AddFunction("fturnright", "c[chroma]b[mt]b", CreateFTurnRight, 0);
+        env->AddFunction("fturn180", "c[chroma]b", CreateFTurn180, 0);
+        return "Why are you looking at this?";
 }
