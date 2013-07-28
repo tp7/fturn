@@ -45,51 +45,54 @@ bool hasChroma(int pixelType) {
     return true;
 }
 
-#define FTURN_TRANSPOSE(src1, src2, src3, src4, src5, src6, src7, src8, mask) \
-auto a = _mm_unpacklo_epi8((src1), (src1)); \
-auto b = _mm_unpacklo_epi8((src2), (src2)); \
-auto c = _mm_unpacklo_epi8((src3), (src3)); \
-auto d = _mm_unpacklo_epi8((src4), (src4)); \
-auto e = _mm_unpacklo_epi8((src5), (src5)); \
-auto f = _mm_unpacklo_epi8((src6), (src6)); \
-auto g = _mm_unpacklo_epi8((src7), (src7)); \
-auto h = _mm_unpacklo_epi8((src8), (src8)); \
-     \
-auto a03b03 = _mm_unpacklo_epi16(a, b); \
-auto c03d03 = _mm_unpacklo_epi16(c, d); \
-auto e03f03 = _mm_unpacklo_epi16(e, f); \
-auto g03h03 = _mm_unpacklo_epi16(g, h); \
-auto a47b47 = _mm_unpackhi_epi16(a, b); \
-auto c47d47 = _mm_unpackhi_epi16(c, d); \
-auto e47f47 = _mm_unpackhi_epi16(e, f); \
-auto g47h47 = _mm_unpackhi_epi16(g, h); \
-    \
-auto a01b01c01d01 = _mm_unpacklo_epi32(a03b03, c03d03); \
-auto a23b23c23d23 = _mm_unpackhi_epi32(a03b03, c03d03); \
-auto e01f01g01h01 = _mm_unpacklo_epi32(e03f03, g03h03); \
-auto e23f23g23h23 = _mm_unpackhi_epi32(e03f03, g03h03); \
-auto a45b45c45d45 = _mm_unpacklo_epi32(a47b47, c47d47); \
-auto a67b67c67d67 = _mm_unpackhi_epi32(a47b47, c47d47); \
-auto e45f45g45h45 = _mm_unpacklo_epi32(e47f47, g47h47); \
-auto e67f67g67h67 = _mm_unpackhi_epi32(e47f47, g47h47); \
-    \
-auto a0b0c0d0e0f0g0h0 = _mm_unpacklo_epi64(a01b01c01d01, e01f01g01h01); \
-auto a1b1c1d1e1f1g1h1 = _mm_unpackhi_epi64(a01b01c01d01, e01f01g01h01); \
-auto a2b2c2d2e2f2g2h2 = _mm_unpacklo_epi64(a23b23c23d23, e23f23g23h23); \
-auto a3b3c3d3e3f3g3h3 = _mm_unpackhi_epi64(a23b23c23d23, e23f23g23h23); \
-auto a4b4c4d4e4f4g4h4 = _mm_unpacklo_epi64(a45b45c45d45, e45f45g45h45); \
-auto a5b5c5d5e5f5g5h5 = _mm_unpackhi_epi64(a45b45c45d45, e45f45g45h45); \
-auto a6b6c6d6e6f6g6h6 = _mm_unpacklo_epi64(a67b67c67d67, e67f67g67h67); \
-auto a7b7c7d7e7f7g7h7 = _mm_unpackhi_epi64(a67b67c67d67, e67f67g67h67); \
-    \
-(src1) = _mm_shuffle_epi8(a0b0c0d0e0f0g0h0, (mask)); \
-(src2) = _mm_shuffle_epi8(a1b1c1d1e1f1g1h1, (mask)); \
-(src3) = _mm_shuffle_epi8(a2b2c2d2e2f2g2h2, (mask)); \
-(src4) = _mm_shuffle_epi8(a3b3c3d3e3f3g3h3, (mask)); \
-(src5) = _mm_shuffle_epi8(a4b4c4d4e4f4g4h4, (mask)); \
-(src6) = _mm_shuffle_epi8(a5b5c5d5e5f5g5h5, (mask)); \
-(src7) = _mm_shuffle_epi8(a6b6c6d6e6f6g6h6, (mask)); \
-(src8) = _mm_shuffle_epi8(a7b7c7d7e7f7g7h7, (mask));
+__forceinline void fturn(__m128i &src1, __m128i &src2, __m128i& src3, __m128i &src4, 
+                             __m128i &src5, __m128i& src6, __m128i &src7, __m128i &src8, const __m128i &mask) {
+    auto a = _mm_unpacklo_epi8((src1), (src1)); 
+    auto b = _mm_unpacklo_epi8((src2), (src2)); 
+    auto c = _mm_unpacklo_epi8((src3), (src3)); 
+    auto d = _mm_unpacklo_epi8((src4), (src4)); 
+    auto e = _mm_unpacklo_epi8((src5), (src5)); 
+    auto f = _mm_unpacklo_epi8((src6), (src6)); 
+    auto g = _mm_unpacklo_epi8((src7), (src7)); 
+    auto h = _mm_unpacklo_epi8((src8), (src8)); 
+
+    auto a03b03 = _mm_unpacklo_epi16(a, b); 
+    auto c03d03 = _mm_unpacklo_epi16(c, d);
+    auto e03f03 = _mm_unpacklo_epi16(e, f); 
+    auto g03h03 = _mm_unpacklo_epi16(g, h); 
+    auto a47b47 = _mm_unpackhi_epi16(a, b); 
+    auto c47d47 = _mm_unpackhi_epi16(c, d); 
+    auto e47f47 = _mm_unpackhi_epi16(e, f); 
+    auto g47h47 = _mm_unpackhi_epi16(g, h); 
+
+    auto a01b01c01d01 = _mm_unpacklo_epi32(a03b03, c03d03); 
+    auto a23b23c23d23 = _mm_unpackhi_epi32(a03b03, c03d03); 
+    auto e01f01g01h01 = _mm_unpacklo_epi32(e03f03, g03h03); 
+    auto e23f23g23h23 = _mm_unpackhi_epi32(e03f03, g03h03); 
+    auto a45b45c45d45 = _mm_unpacklo_epi32(a47b47, c47d47); 
+    auto a67b67c67d67 = _mm_unpackhi_epi32(a47b47, c47d47); 
+    auto e45f45g45h45 = _mm_unpacklo_epi32(e47f47, g47h47); 
+    auto e67f67g67h67 = _mm_unpackhi_epi32(e47f47, g47h47); 
+
+    auto a0b0c0d0e0f0g0h0 = _mm_unpacklo_epi64(a01b01c01d01, e01f01g01h01); 
+    auto a1b1c1d1e1f1g1h1 = _mm_unpackhi_epi64(a01b01c01d01, e01f01g01h01); 
+    auto a2b2c2d2e2f2g2h2 = _mm_unpacklo_epi64(a23b23c23d23, e23f23g23h23); 
+    auto a3b3c3d3e3f3g3h3 = _mm_unpackhi_epi64(a23b23c23d23, e23f23g23h23); 
+    auto a4b4c4d4e4f4g4h4 = _mm_unpacklo_epi64(a45b45c45d45, e45f45g45h45); 
+    auto a5b5c5d5e5f5g5h5 = _mm_unpackhi_epi64(a45b45c45d45, e45f45g45h45); 
+    auto a6b6c6d6e6f6g6h6 = _mm_unpacklo_epi64(a67b67c67d67, e67f67g67h67); 
+    auto a7b7c7d7e7f7g7h7 = _mm_unpackhi_epi64(a67b67c67d67, e67f67g67h67); 
+
+    src1 = _mm_shuffle_epi8(a0b0c0d0e0f0g0h0, mask); 
+    src2 = _mm_shuffle_epi8(a1b1c1d1e1f1g1h1, mask); 
+    src3 = _mm_shuffle_epi8(a2b2c2d2e2f2g2h2, mask); 
+    src4 = _mm_shuffle_epi8(a3b3c3d3e3f3g3h3, mask); 
+    src5 = _mm_shuffle_epi8(a4b4c4d4e4f4g4h4, mask); 
+    src6 = _mm_shuffle_epi8(a5b5c5d5e5f5g5h5, mask); 
+    src7 = _mm_shuffle_epi8(a6b6c6d6e6f6g6h6, mask); 
+    src8 = _mm_shuffle_epi8(a7b7c7d7e7f7g7h7, mask);
+}
+
 
 
 void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
@@ -118,7 +121,7 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
             auto src7 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(pSrc+x+srcPitch*6));
             auto src8 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(pSrc+x+srcPitch*7));
 
-            FTURN_TRANSPOSE(src1, src2, src3, src4, src5, src6, src7, src8, mask);
+            fturn(src1, src2, src3, src4, src5, src6, src7, src8, mask);
 
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*0), src1);
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*1), src2);
@@ -199,7 +202,7 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
             auto src7 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(pSrc-x+srcPitch*6));
             auto src8 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(pSrc-x+srcPitch*7));
 
-            FTURN_TRANSPOSE(src1, src2, src3, src4, src5, src6, src7, src8, mask);
+            fturn(src1, src2, src3, src4, src5, src6, src7, src8, mask);
 
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*0), src8);
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*1), src7);
