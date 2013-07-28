@@ -259,7 +259,7 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
     }
 }
 
-void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
+void turnPlane180SSE3(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     BYTE* pDst2 = pDst;
     const BYTE* pSrc2 = pSrc;
     int srcWidthMod16 = (srcWidth / 16) * 16;
@@ -293,6 +293,17 @@ void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeig
     }
 }
 
+void turnPlane180C(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
+    pDst = pDst + dstPitch * (srcHeight-1) + srcWidth - 1;
+    for (int y = 0; y < srcHeight; ++y) {
+        for (int x = 0; x < srcWidth; ++x) {
+            pDst[-x] = pSrc[x];
+        }
+        pSrc += srcPitch;
+        pDst -= dstPitch;
+    }
+}
+
 class FTurn : public GenericVideoFilter {
 public:
     FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env);
@@ -316,12 +327,14 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
         env->ThrowError(getUnsupportedColorspaceMessage());
     }
 
+    if (!(env->GetCPUFlags() & CPUF_SSE2)) {
+        env->ThrowError("Sorry, at least SSE2 is required");
+    }
+
     int CPUInfo[4]; //eax, ebx, ecx, edx
     __cpuid(CPUInfo, 1);
 
-    if (!(CPUInfo[2] & 0x00000200)) {
-        env->ThrowError("Sorry, SSSE3 is required");
-    }
+    bool sse3 = CPUInfo[2] & 0x00000200;
 
     if (direction == TurnDirection::RIGHT || direction == TurnDirection::LEFT) {
         vi.width = child->GetVideoInfo().height;
@@ -335,7 +348,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
             bufferUV = new BYTE[vi.width*vi.height];
         }
     } else {
-        turnFunction_ = turnPlane180;
+        turnFunction_ = sse3 ? turnPlane180SSE3 : turnPlane180C;
     }
 }
 
