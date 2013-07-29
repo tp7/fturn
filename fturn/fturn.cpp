@@ -89,7 +89,7 @@ __forceinline void fTranspose(__m128i &src1, __m128i &src2, __m128i& src3, __m12
     src8 = _mm_unpackhi_epi64(a67b67c67d67, e67f67g67h67); 
 }
 
-
+template<InstructionSet level>
 void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     bool useBuffer = true;
     if (dstPitch == srcHeight) {
@@ -99,7 +99,16 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
 
     auto pDst2 = pDst;
     auto pSrc2 = pSrc;
-    auto mask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 6, 8, 10, 12, 14);
+
+    __m128i pandMask, zero, pshufbMask;
+
+    if (level == InstructionSet::SSE2) {
+        pandMask = _mm_set_epi8(0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF);
+        zero = _mm_setzero_si128();
+    } else {
+        pshufbMask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 6, 8, 10, 12, 14);
+    }
+
     int srcWidthMod8 = (srcWidth / 8) * 8;
     int srcHeightMod8 = (srcHeight / 8) * 8;
     for(int y=0; y<srcHeightMod8; y+=8)
@@ -117,15 +126,62 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
             auto src8 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(pSrc+x+srcPitch*7));
 
             fTranspose(src1, src2, src3, src4, src5, src6, src7, src8);
+            
+            if (level == InstructionSet::SSE2) {
+                src1 = _mm_shuffle_epi32(src1, _MM_SHUFFLE(1, 0, 3, 2));
+                src2 = _mm_shuffle_epi32(src2, _MM_SHUFFLE(1, 0, 3, 2));
+                src3 = _mm_shuffle_epi32(src3, _MM_SHUFFLE(1, 0, 3, 2));
+                src4 = _mm_shuffle_epi32(src4, _MM_SHUFFLE(1, 0, 3, 2));
+                src5 = _mm_shuffle_epi32(src5, _MM_SHUFFLE(1, 0, 3, 2));
+                src6 = _mm_shuffle_epi32(src6, _MM_SHUFFLE(1, 0, 3, 2));
+                src7 = _mm_shuffle_epi32(src7, _MM_SHUFFLE(1, 0, 3, 2));
+                src8 = _mm_shuffle_epi32(src8, _MM_SHUFFLE(1, 0, 3, 2));
 
-            src1 = _mm_shuffle_epi8(src1, mask); 
-            src2 = _mm_shuffle_epi8(src2, mask); 
-            src3 = _mm_shuffle_epi8(src3, mask); 
-            src4 = _mm_shuffle_epi8(src4, mask); 
-            src5 = _mm_shuffle_epi8(src5, mask); 
-            src6 = _mm_shuffle_epi8(src6, mask); 
-            src7 = _mm_shuffle_epi8(src7, mask); 
-            src8 = _mm_shuffle_epi8(src8, mask);
+                src1 = _mm_shufflelo_epi16(src1, _MM_SHUFFLE(0, 1, 2, 3));
+                src2 = _mm_shufflelo_epi16(src2, _MM_SHUFFLE(0, 1, 2, 3));
+                src3 = _mm_shufflelo_epi16(src3, _MM_SHUFFLE(0, 1, 2, 3));
+                src4 = _mm_shufflelo_epi16(src4, _MM_SHUFFLE(0, 1, 2, 3));
+                src5 = _mm_shufflelo_epi16(src5, _MM_SHUFFLE(0, 1, 2, 3));
+                src6 = _mm_shufflelo_epi16(src6, _MM_SHUFFLE(0, 1, 2, 3));
+                src7 = _mm_shufflelo_epi16(src7, _MM_SHUFFLE(0, 1, 2, 3));
+                src8 = _mm_shufflelo_epi16(src8, _MM_SHUFFLE(0, 1, 2, 3));
+
+                src1 = _mm_shufflehi_epi16(src1, _MM_SHUFFLE(0, 1, 2, 3));
+                src2 = _mm_shufflehi_epi16(src2, _MM_SHUFFLE(0, 1, 2, 3));
+                src3 = _mm_shufflehi_epi16(src3, _MM_SHUFFLE(0, 1, 2, 3));
+                src4 = _mm_shufflehi_epi16(src4, _MM_SHUFFLE(0, 1, 2, 3));
+                src5 = _mm_shufflehi_epi16(src5, _MM_SHUFFLE(0, 1, 2, 3));
+                src6 = _mm_shufflehi_epi16(src6, _MM_SHUFFLE(0, 1, 2, 3));
+                src7 = _mm_shufflehi_epi16(src7, _MM_SHUFFLE(0, 1, 2, 3));
+                src8 = _mm_shufflehi_epi16(src8, _MM_SHUFFLE(0, 1, 2, 3));
+
+                src1 = _mm_and_si128(src1, pandMask);
+                src2 = _mm_and_si128(src2, pandMask);
+                src3 = _mm_and_si128(src3, pandMask);
+                src4 = _mm_and_si128(src4, pandMask);
+                src5 = _mm_and_si128(src5, pandMask);
+                src6 = _mm_and_si128(src6, pandMask);
+                src7 = _mm_and_si128(src7, pandMask);
+                src8 = _mm_and_si128(src8, pandMask);
+
+                src1 = _mm_packus_epi16(src1, zero);
+                src2 = _mm_packus_epi16(src2, zero);
+                src3 = _mm_packus_epi16(src3, zero);
+                src4 = _mm_packus_epi16(src4, zero);
+                src5 = _mm_packus_epi16(src5, zero);
+                src6 = _mm_packus_epi16(src6, zero);
+                src7 = _mm_packus_epi16(src7, zero);
+                src8 = _mm_packus_epi16(src8, zero);
+            } else {
+                src1 = _mm_shuffle_epi8(src1, pshufbMask); 
+                src2 = _mm_shuffle_epi8(src2, pshufbMask); 
+                src3 = _mm_shuffle_epi8(src3, pshufbMask); 
+                src4 = _mm_shuffle_epi8(src4, pshufbMask); 
+                src5 = _mm_shuffle_epi8(src5, pshufbMask); 
+                src6 = _mm_shuffle_epi8(src6, pshufbMask); 
+                src7 = _mm_shuffle_epi8(src7, pshufbMask); 
+                src8 = _mm_shuffle_epi8(src8, pshufbMask);
+            }
 
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*0), src1);
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*1), src2);
@@ -348,6 +404,8 @@ void turnPlane180C(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHei
 
 auto turnPlaneLeftSSE2 = &turnPlaneLeft<InstructionSet::SSE2>;
 auto turnPlaneLeftSSSE3 = &turnPlaneLeft<InstructionSet::SSSE3>;
+auto turnPlaneRightSSE2 = &turnPlaneRight<InstructionSet::SSE2>;
+auto turnPlaneRightSSSE3 = &turnPlaneRight<InstructionSet::SSSE3>;
 
 class FTurn : public GenericVideoFilter {
 public:
@@ -388,7 +446,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
         if (direction == TurnDirection::LEFT) {
             turnFunction_ = sse3 ? turnPlaneLeftSSSE3 : turnPlaneLeftSSE2;
         } else {
-            turnFunction_ = turnPlaneRight;
+            turnFunction_ = sse3 ? turnPlaneRightSSSE3 : turnPlaneRightSSE2;
         }
 
         buffer = new BYTE[vi.width*vi.height];
