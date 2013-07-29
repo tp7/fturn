@@ -433,7 +433,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
     __cpuid(CPUInfo, 1);
 
     #pragma warning(disable: 4800)
-    bool sse3 = CPUInfo[2] & 0x00000200;
+    bool ssse3 = CPUInfo[2] & 0x00000200;
     #pragma warning(disable: 4800)
 
     if (direction == TurnDirection::RIGHT || direction == TurnDirection::LEFT) {
@@ -441,9 +441,9 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
         vi.height = child->GetVideoInfo().width;
 
         if (direction == TurnDirection::LEFT) {
-            turnFunction_ = sse3 ? turnPlaneLeftSSSE3 : turnPlaneLeftSSE2;
+            turnFunction_ = ssse3 ? turnPlaneLeftSSSE3 : turnPlaneLeftSSE2;
         } else {
-            turnFunction_ = sse3 ? turnPlaneRightSSSE3 : turnPlaneRightSSE2;
+            turnFunction_ = ssse3 ? turnPlaneRightSSSE3 : turnPlaneRightSSE2;
         }
 
         buffer = new BYTE[vi.width*vi.height];
@@ -452,7 +452,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
             bufferUV = new BYTE[vi.width*vi.height];
         }
     } else {
-        turnFunction_ = sse3 ? turnPlane180SSSE3 : turnPlane180SSE2;
+        turnFunction_ = ssse3 ? turnPlane180SSSE3 : turnPlane180SSE2;
     }
 }
 
