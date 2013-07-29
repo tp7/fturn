@@ -14,7 +14,7 @@ FTurn180(chroma=true)
 Great performance improvements for antialiasing scripts like maa. You can disable chroma processing in case you don't need it (almost often in antialiasing scripts).
 
 ### Requirements ###
-SSSE3 is required. This means you need to have at least Core 2 Duo.
+SSE2 is required. The plugin is also optimized for SSSE3 so you can assume a slightly better performance if your CPU has it.
 
 ### License ###
 This project is licensed under the [MIT license](http://opensource.org/licenses/MIT). Binaries are [GPL v2](http://www.gnu.org/licenses/gpl-2.0.html) because if I understand licensing stuff right (please tell me if I don't) they must be.
