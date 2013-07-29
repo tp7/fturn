@@ -103,7 +103,9 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
     __m128i pandMask, zero, pshufbMask;
 
     if (level == InstructionSet::SSE2) {
+        #pragma warning(disable: 4309)
         pandMask = _mm_set_epi8(0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF);
+        #pragma warning(default: 4309)
         zero = _mm_setzero_si128();
     } else {
         pshufbMask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 6, 8, 10, 12, 14);
@@ -251,7 +253,9 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
     __m128i pandMask, pshufbMask, zero;
 
     if (level == InstructionSet::SSE2) {
+        #pragma warning(disable: 4309)
         pandMask = _mm_set_epi8(0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF);
+        #pragma warning(default: 4309)
         zero = _mm_setzero_si128();
     }
     else {
@@ -437,7 +441,9 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
     int CPUInfo[4]; //eax, ebx, ecx, edx
     __cpuid(CPUInfo, 1);
 
+    #pragma warning(disable: 4800)
     bool sse3 = CPUInfo[2] & 0x00000200;
+    #pragma warning(disable: 4800)
 
     if (direction == TurnDirection::RIGHT || direction == TurnDirection::LEFT) {
         vi.width = child->GetVideoInfo().height;
