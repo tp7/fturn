@@ -89,6 +89,14 @@ __forceinline void fTranspose(__m128i &src1, __m128i &src2, __m128i& src3, __m12
     src8 = _mm_unpackhi_epi64(a67b67c67d67, e67f67g67h67); 
 }
 
+__forceinline __m128i halfRotateEpi16(__m128i src, const __m128i& pandMask) {
+    auto result = _mm_shuffle_epi32(src, _MM_SHUFFLE(1, 0, 3, 2));
+    result = _mm_shufflelo_epi16(result, _MM_SHUFFLE(0, 1, 2, 3));
+    result = _mm_shufflehi_epi16(result, _MM_SHUFFLE(0, 1, 2, 3));
+    return _mm_and_si128(result, pandMask);
+}
+
+
 template<InstructionSet level>
 void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     bool useBuffer = true;
@@ -130,41 +138,14 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
             fTranspose(src1, src2, src3, src4, src5, src6, src7, src8);
             
             if (level == InstructionSet::SSE2) {
-                src1 = _mm_shuffle_epi32(src1, _MM_SHUFFLE(1, 0, 3, 2));
-                src2 = _mm_shuffle_epi32(src2, _MM_SHUFFLE(1, 0, 3, 2));
-                src3 = _mm_shuffle_epi32(src3, _MM_SHUFFLE(1, 0, 3, 2));
-                src4 = _mm_shuffle_epi32(src4, _MM_SHUFFLE(1, 0, 3, 2));
-                src5 = _mm_shuffle_epi32(src5, _MM_SHUFFLE(1, 0, 3, 2));
-                src6 = _mm_shuffle_epi32(src6, _MM_SHUFFLE(1, 0, 3, 2));
-                src7 = _mm_shuffle_epi32(src7, _MM_SHUFFLE(1, 0, 3, 2));
-                src8 = _mm_shuffle_epi32(src8, _MM_SHUFFLE(1, 0, 3, 2));
-
-                src1 = _mm_shufflelo_epi16(src1, _MM_SHUFFLE(0, 1, 2, 3));
-                src2 = _mm_shufflelo_epi16(src2, _MM_SHUFFLE(0, 1, 2, 3));
-                src3 = _mm_shufflelo_epi16(src3, _MM_SHUFFLE(0, 1, 2, 3));
-                src4 = _mm_shufflelo_epi16(src4, _MM_SHUFFLE(0, 1, 2, 3));
-                src5 = _mm_shufflelo_epi16(src5, _MM_SHUFFLE(0, 1, 2, 3));
-                src6 = _mm_shufflelo_epi16(src6, _MM_SHUFFLE(0, 1, 2, 3));
-                src7 = _mm_shufflelo_epi16(src7, _MM_SHUFFLE(0, 1, 2, 3));
-                src8 = _mm_shufflelo_epi16(src8, _MM_SHUFFLE(0, 1, 2, 3));
-
-                src1 = _mm_shufflehi_epi16(src1, _MM_SHUFFLE(0, 1, 2, 3));
-                src2 = _mm_shufflehi_epi16(src2, _MM_SHUFFLE(0, 1, 2, 3));
-                src3 = _mm_shufflehi_epi16(src3, _MM_SHUFFLE(0, 1, 2, 3));
-                src4 = _mm_shufflehi_epi16(src4, _MM_SHUFFLE(0, 1, 2, 3));
-                src5 = _mm_shufflehi_epi16(src5, _MM_SHUFFLE(0, 1, 2, 3));
-                src6 = _mm_shufflehi_epi16(src6, _MM_SHUFFLE(0, 1, 2, 3));
-                src7 = _mm_shufflehi_epi16(src7, _MM_SHUFFLE(0, 1, 2, 3));
-                src8 = _mm_shufflehi_epi16(src8, _MM_SHUFFLE(0, 1, 2, 3));
-
-                src1 = _mm_and_si128(src1, pandMask);
-                src2 = _mm_and_si128(src2, pandMask);
-                src3 = _mm_and_si128(src3, pandMask);
-                src4 = _mm_and_si128(src4, pandMask);
-                src5 = _mm_and_si128(src5, pandMask);
-                src6 = _mm_and_si128(src6, pandMask);
-                src7 = _mm_and_si128(src7, pandMask);
-                src8 = _mm_and_si128(src8, pandMask);
+                src1 = halfRotateEpi16(src1, pandMask);
+                src2 = halfRotateEpi16(src2, pandMask);
+                src3 = halfRotateEpi16(src3, pandMask);
+                src4 = halfRotateEpi16(src4, pandMask);
+                src5 = halfRotateEpi16(src5, pandMask);
+                src6 = halfRotateEpi16(src6, pandMask);
+                src7 = halfRotateEpi16(src7, pandMask);
+                src8 = halfRotateEpi16(src8, pandMask);
 
                 src1 = _mm_packus_epi16(src1, zero);
                 src2 = _mm_packus_epi16(src2, zero);
@@ -361,12 +342,23 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
     }
 }
 
-void turnPlane180SSE3(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
+template<InstructionSet level>
+void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     BYTE* pDst2 = pDst;
     const BYTE* pSrc2 = pSrc;
     int srcWidthMod16 = (srcWidth / 16) * 16;
 
-    auto mask = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    __m128i pandMask, zero, pshufbMask;
+
+    if (level == InstructionSet::SSE2) {
+        #pragma warning(disable: 4309)
+        pandMask = _mm_set_epi8(0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF);
+        #pragma warning(default: 4309)
+        zero = _mm_setzero_si128();
+    } else {
+        pshufbMask = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    }
+
     pDst += dstPitch * (srcHeight-1) + srcWidth - 16;
     for(int y = 0; y < srcHeight; ++y)
     {
@@ -374,9 +366,17 @@ void turnPlane180SSE3(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int src
         {
             auto src = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pSrc+x));
 
-            auto result = _mm_shuffle_epi8(src, mask);
+            if (level == InstructionSet::SSE2) {
+                auto low = _mm_unpacklo_epi8(src, zero);
+                auto high = _mm_unpackhi_epi8(src, zero);
+                low = halfRotateEpi16(low, pandMask);
+                high = halfRotateEpi16(high, pandMask);
+                src = _mm_packus_epi16(high, low);
+            } else { 
+                src = _mm_shuffle_epi8(src, pshufbMask);
+            }
 
-            _mm_storeu_si128(reinterpret_cast<__m128i*>(pDst-x), result);
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(pDst-x), src);
         }
         pSrc += srcPitch;
         pDst -= dstPitch;
@@ -395,21 +395,12 @@ void turnPlane180SSE3(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int src
     }
 }
 
-void turnPlane180C(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
-    pDst = pDst + dstPitch * (srcHeight-1) + srcWidth - 1;
-    for (int y = 0; y < srcHeight; ++y) {
-        for (int x = 0; x < srcWidth; ++x) {
-            pDst[-x] = pSrc[x];
-        }
-        pSrc += srcPitch;
-        pDst -= dstPitch;
-    }
-}
-
 auto turnPlaneLeftSSE2 = &turnPlaneLeft<InstructionSet::SSE2>;
 auto turnPlaneLeftSSSE3 = &turnPlaneLeft<InstructionSet::SSSE3>;
 auto turnPlaneRightSSE2 = &turnPlaneRight<InstructionSet::SSE2>;
 auto turnPlaneRightSSSE3 = &turnPlaneRight<InstructionSet::SSSE3>;
+auto turnPlane180SSE2 = &turnPlane180<InstructionSet::SSE2>;
+auto turnPlane180SSSE3 = &turnPlane180<InstructionSet::SSSE3>;
 
 class FTurn : public GenericVideoFilter {
 public:
@@ -423,7 +414,7 @@ public:
 private:
     bool chroma_;
     bool mt_;
-    decltype(&turnPlane180SSE3) turnFunction_;
+    decltype(turnPlane180SSE2) turnFunction_;
     BYTE *buffer;
     BYTE *bufferUV;
 };
@@ -461,7 +452,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
             bufferUV = new BYTE[vi.width*vi.height];
         }
     } else {
-        turnFunction_ = sse3 ? turnPlane180SSE3 : turnPlane180C;
+        turnFunction_ = sse3 ? turnPlane180SSSE3 : turnPlane180SSE2;
     }
 }
 
