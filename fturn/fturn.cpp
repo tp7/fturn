@@ -213,7 +213,6 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
     }
 }
 
-template<InstructionSet level>
 void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     bool useBuffer = true;
     if (dstPitch == srcHeight) {
@@ -227,13 +226,8 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
     int srcHeightMod8 = (srcHeight / 8) * 8;
 
     pSrc += srcWidth-8;
-    __m128i pshufbMask, zero;
 
-    zero = _mm_setzero_si128();
-
-    if (level == InstructionSet::SSSE3) {
-        pshufbMask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 14, 12, 10, 8, 6, 4, 2, 0);
-    }
+    auto zero = _mm_setzero_si128();
 
     for(int y=0; y<srcHeightMod8; y+=8)
     {
@@ -251,26 +245,15 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
 
             fTranspose(src1, src2, src3, src4, src5, src6, src7, src8, zero);
 
-            if (level == InstructionSet::SSE2) {
-                src1 =  _mm_packus_epi16(src1, zero); 
-                src2 =  _mm_packus_epi16(src2, zero); 
-                src3 =  _mm_packus_epi16(src3, zero); 
-                src4 =  _mm_packus_epi16(src4, zero); 
-                src5 =  _mm_packus_epi16(src5, zero); 
-                src6 =  _mm_packus_epi16(src6, zero); 
-                src7 =  _mm_packus_epi16(src7, zero); 
-                src8 =  _mm_packus_epi16(src8, zero);
-            } else {
-                src1 = _mm_shuffle_epi8(src1, pshufbMask); 
-                src2 = _mm_shuffle_epi8(src2, pshufbMask); 
-                src3 = _mm_shuffle_epi8(src3, pshufbMask); 
-                src4 = _mm_shuffle_epi8(src4, pshufbMask); 
-                src5 = _mm_shuffle_epi8(src5, pshufbMask); 
-                src6 = _mm_shuffle_epi8(src6, pshufbMask); 
-                src7 = _mm_shuffle_epi8(src7, pshufbMask); 
-                src8 = _mm_shuffle_epi8(src8, pshufbMask);
-            }
-
+            src1 =  _mm_packus_epi16(src1, zero); 
+            src2 =  _mm_packus_epi16(src2, zero); 
+            src3 =  _mm_packus_epi16(src3, zero); 
+            src4 =  _mm_packus_epi16(src4, zero); 
+            src5 =  _mm_packus_epi16(src5, zero); 
+            src6 =  _mm_packus_epi16(src6, zero); 
+            src7 =  _mm_packus_epi16(src7, zero); 
+            src8 =  _mm_packus_epi16(src8, zero);
+          
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*0), src8);
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*1), src7);
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*2), src6);
@@ -376,8 +359,6 @@ void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeig
     }
 }
 
-auto turnPlaneLeftSSE2 = &turnPlaneLeft<InstructionSet::SSE2>;
-auto turnPlaneLeftSSSE3 = &turnPlaneLeft<InstructionSet::SSSE3>;
 auto turnPlaneRightSSE2 = &turnPlaneRight<InstructionSet::SSE2>;
 auto turnPlaneRightSSSE3 = &turnPlaneRight<InstructionSet::SSSE3>;
 auto turnPlane180SSE2 = &turnPlane180<InstructionSet::SSE2>;
@@ -414,7 +395,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
     __cpuid(CPUInfo, 1);
 
     #pragma warning(disable: 4800)
-    bool ssse3 = false;//CPUInfo[2] & 0x00000200;
+    bool ssse3 = CPUInfo[2] & 0x00000200;
     #pragma warning(disable: 4800)
 
     if (direction == TurnDirection::RIGHT || direction == TurnDirection::LEFT) {
@@ -422,7 +403,7 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
         vi.height = child->GetVideoInfo().width;
 
         if (direction == TurnDirection::LEFT) {
-            turnFunction_ = ssse3 ? turnPlaneLeftSSSE3 : turnPlaneLeftSSE2;
+            turnFunction_ = turnPlaneLeft;
         } else {
             turnFunction_ = ssse3 ? turnPlaneRightSSSE3 : turnPlaneRightSSE2;
         }
