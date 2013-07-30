@@ -50,43 +50,36 @@ bool hasChroma(int pixelType) {
     return true;
 }
 
+__forceinline __m128i mm_movehl_si128(const __m128i &a, const __m128i &b) {
+    return _mm_castps_si128(_mm_movehl_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b)));
+}
+
 __forceinline void fTranspose(__m128i &src1, __m128i &src2, __m128i& src3, __m128i &src4, 
                              __m128i &src5, __m128i& src6, __m128i &src7, __m128i &src8, const __m128i &zero) {
-    auto a = _mm_unpacklo_epi8(src1, zero); 
-    auto b = _mm_unpacklo_epi8(src2, zero); 
-    auto c = _mm_unpacklo_epi8(src3, zero); 
-    auto d = _mm_unpacklo_epi8(src4, zero); 
-    auto e = _mm_unpacklo_epi8(src5, zero); 
-    auto f = _mm_unpacklo_epi8(src6, zero); 
-    auto g = _mm_unpacklo_epi8(src7, zero); 
-    auto h = _mm_unpacklo_epi8(src8, zero); 
 
-    auto a03b03 = _mm_unpacklo_epi16(a, b); 
-    auto c03d03 = _mm_unpacklo_epi16(c, d);
-    auto e03f03 = _mm_unpacklo_epi16(e, f); 
-    auto g03h03 = _mm_unpacklo_epi16(g, h); 
-    auto a47b47 = _mm_unpackhi_epi16(a, b); 
-    auto c47d47 = _mm_unpackhi_epi16(c, d); 
-    auto e47f47 = _mm_unpackhi_epi16(e, f); 
-    auto g47h47 = _mm_unpackhi_epi16(g, h); 
+    auto a07b07 = _mm_unpacklo_epi8(src1, src2); 
+    auto c07d07 = _mm_unpacklo_epi8(src3, src4); 
+    auto e07f07 = _mm_unpacklo_epi8(src5, src6); 
+    auto g07h07 = _mm_unpacklo_epi8(src7, src8);  
 
-    auto a01b01c01d01 = _mm_unpacklo_epi32(a03b03, c03d03); 
-    auto a23b23c23d23 = _mm_unpackhi_epi32(a03b03, c03d03); 
-    auto e01f01g01h01 = _mm_unpacklo_epi32(e03f03, g03h03); 
-    auto e23f23g23h23 = _mm_unpackhi_epi32(e03f03, g03h03); 
-    auto a45b45c45d45 = _mm_unpacklo_epi32(a47b47, c47d47); 
-    auto a67b67c67d67 = _mm_unpackhi_epi32(a47b47, c47d47); 
-    auto e45f45g45h45 = _mm_unpacklo_epi32(e47f47, g47h47); 
-    auto e67f67g67h67 = _mm_unpackhi_epi32(e47f47, g47h47); 
+    auto a03b03c03d03 = _mm_unpacklo_epi16(a07b07, c07d07);
+    auto e03f03g03h03 = _mm_unpacklo_epi16(e07f07, g07h07);
+    auto a47b47c47d47 = _mm_unpackhi_epi16(a07b07, c07d07);
+    auto e47f47g47h47 = _mm_unpackhi_epi16(e07f07, g07h07);
 
-    src1 = _mm_unpacklo_epi64(a01b01c01d01, e01f01g01h01); 
-    src2 = _mm_unpackhi_epi64(a01b01c01d01, e01f01g01h01); 
-    src3 = _mm_unpacklo_epi64(a23b23c23d23, e23f23g23h23); 
-    src4 = _mm_unpackhi_epi64(a23b23c23d23, e23f23g23h23); 
-    src5 = _mm_unpacklo_epi64(a45b45c45d45, e45f45g45h45); 
-    src6 = _mm_unpackhi_epi64(a45b45c45d45, e45f45g45h45); 
-    src7 = _mm_unpacklo_epi64(a67b67c67d67, e67f67g67h67); 
-    src8 = _mm_unpackhi_epi64(a67b67c67d67, e67f67g67h67); 
+    auto a01b01c01d01e01f01g01h01 = _mm_unpacklo_epi32(a03b03c03d03, e03f03g03h03); 
+    auto a23b23c23d23e23f23g23h23 = _mm_unpackhi_epi32(a03b03c03d03, e03f03g03h03); 
+    auto a45b45c45d45e45f45g45h45 = _mm_unpacklo_epi32(a47b47c47d47, e47f47g47h47); 
+    auto a67b67c67d67e67f67g67h67 = _mm_unpackhi_epi32(a47b47c47d47, e47f47g47h47); 
+
+    src1 = a01b01c01d01e01f01g01h01;
+    src2 = mm_movehl_si128(zero, a01b01c01d01e01f01g01h01);
+    src3 = a23b23c23d23e23f23g23h23;
+    src4 = mm_movehl_si128(zero, a23b23c23d23e23f23g23h23);
+    src5 = a45b45c45d45e45f45g45h45;
+    src6 = mm_movehl_si128(zero, a45b45c45d45e45f45g45h45);
+    src7 = a67b67c67d67e67f67g67h67;
+    src8 = mm_movehl_si128(zero, a67b67c67d67e67f67g67h67);
 }
 
 __forceinline __m128i rotateEpi16(__m128i src) {
@@ -112,7 +105,7 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
     zero = _mm_setzero_si128();
 
     if (level == InstructionSet::SSSE3) {
-        pshufbMask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 6, 8, 10, 12, 14);
+        pshufbMask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7);
     }
 
     int srcWidthMod8 = (srcWidth / 8) * 8;
@@ -134,6 +127,15 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
             fTranspose(src1, src2, src3, src4, src5, src6, src7, src8, zero);
             
             if (level == InstructionSet::SSE2) {
+                src1 = _mm_unpacklo_epi8(src1, zero);
+                src2 = _mm_unpacklo_epi8(src2, zero);
+                src3 = _mm_unpacklo_epi8(src3, zero);
+                src4 = _mm_unpacklo_epi8(src4, zero);
+                src5 = _mm_unpacklo_epi8(src5, zero);
+                src6 = _mm_unpacklo_epi8(src6, zero);
+                src7 = _mm_unpacklo_epi8(src7, zero);
+                src8 = _mm_unpacklo_epi8(src8, zero);
+
                 src1 = rotateEpi16(src1);
                 src2 = rotateEpi16(src2);
                 src3 = rotateEpi16(src3);
@@ -245,15 +247,6 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
 
             fTranspose(src1, src2, src3, src4, src5, src6, src7, src8, zero);
 
-            src1 =  _mm_packus_epi16(src1, zero); 
-            src2 =  _mm_packus_epi16(src2, zero); 
-            src3 =  _mm_packus_epi16(src3, zero); 
-            src4 =  _mm_packus_epi16(src4, zero); 
-            src5 =  _mm_packus_epi16(src5, zero); 
-            src6 =  _mm_packus_epi16(src6, zero); 
-            src7 =  _mm_packus_epi16(src7, zero); 
-            src8 =  _mm_packus_epi16(src8, zero);
-          
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*0), src8);
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*1), src7);
             _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*2), src6);
