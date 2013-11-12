@@ -100,13 +100,8 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
     auto pDst2 = pDst;
     auto pSrc2 = pSrc;
 
-    __m128i zero, pshufbMask;
-
-    zero = _mm_setzero_si128();
-
-    if (level == InstructionSet::SSSE3) {
-        pshufbMask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7);
-    }
+    __m128i zero = _mm_setzero_si128();
+    __m128i pshufbMask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7);
 
     int srcWidthMod8 = (srcWidth / 8) * 8;
     int srcHeightMod8 = (srcHeight / 8) * 8;
@@ -308,13 +303,8 @@ void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeig
     const BYTE* pSrc2 = pSrc;
     int srcWidthMod16 = (srcWidth / 16) * 16;
 
-    __m128i zero, pshufbMask;
-
-    if (level == InstructionSet::SSE2) {
-        zero = _mm_setzero_si128();
-    } else {
-        pshufbMask = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-    }
+    __m128i zero = _mm_setzero_si128();
+    __m128i pshufbMask = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
     pDst += dstPitch * (srcHeight-1) + srcWidth - 16;
     for(int y = 0; y < srcHeight; ++y)
