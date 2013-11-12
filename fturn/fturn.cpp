@@ -90,14 +90,7 @@ __forceinline __m128i rotateEpi16(__m128i src) {
 
 
 template<InstructionSet level>
-void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
-    bool useBuffer = true;
-    if (dstPitch == srcHeight) {
-        buffer = pDst;
-        useBuffer = false;
-    }
-
-    auto pDst2 = pDst;
+void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     auto pSrc2 = pSrc;
 
     __m128i zero = _mm_setzero_si128();
@@ -159,16 +152,16 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
                 src8 = _mm_shuffle_epi8(src8, pshufbMask);
             }
 
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*0), src1);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*1), src2);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*2), src3);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*3), src4);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*4), src5);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*5), src6);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*6), src7);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*7), src8);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*0), src1);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*1), src2);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*2), src3);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*3), src4);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*4), src5);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*5), src6);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*6), src7);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*7), src8);
 
-            offset += srcHeight*8;
+            offset += dstPitch*8;
         }
         pSrc += srcPitch * 8;
     }
@@ -180,8 +173,8 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
             int offset = srcHeight-1-y;
             for (int x=0; x<srcWidth; ++x)
             {
-                buffer[offset] = pSrc[x];
-                offset += srcHeight;
+                pDst[offset] = pSrc[x];
+                offset += dstPitch;
             }
             pSrc += srcPitch;
         }
@@ -191,33 +184,18 @@ void turnPlaneRight(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, in
         pSrc = pSrc2;
         for(int y=0; y<srcHeight; ++y)
         {
-            int offset = (srcWidthMod8+1)*srcHeight - 1 - y;
+            int offset = (srcWidthMod8)*dstPitch + srcHeight - 1 - y;
             for (int x=srcWidthMod8; x<srcWidth; ++x)
             {
-                buffer[offset] = pSrc[x];
-                offset += srcHeight;
+                pDst[offset] = pSrc[x];
+                offset += dstPitch;
             }
             pSrc += srcPitch;
         }
     }
-
-    if (useBuffer) {
-        for (int y = 0; y < srcWidth; ++y) {
-            memcpy(pDst2, buffer, srcHeight);
-            pDst2 += dstPitch;
-            buffer += srcHeight;
-        }
-    }
 }
 
-void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
-    bool useBuffer = true;
-    if (dstPitch == srcHeight) {
-        buffer = pDst;
-        useBuffer = false;
-    }
-
-    auto pDst2 = pDst;
+void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     auto pSrc2 = pSrc;
     int srcWidthMod8 = (srcWidth / 8) * 8;
     int srcHeightMod8 = (srcHeight / 8) * 8;
@@ -242,16 +220,16 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
 
             fTranspose(src1, src2, src3, src4, src5, src6, src7, src8, zero);
 
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*0), src8);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*1), src7);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*2), src6);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*3), src5);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*4), src4);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*5), src3);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*6), src2);
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(buffer+offset+srcHeight*7), src1);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*0), src8);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*1), src7);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*2), src6);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*3), src5);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*4), src4);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*5), src3);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*6), src2);
+            _mm_storel_epi64(reinterpret_cast<__m128i*>(pDst+offset+dstPitch*7), src1);
 
-            offset += srcHeight*8;
+            offset += dstPitch*8;
         }
         pSrc += srcPitch * 8;
     }
@@ -265,8 +243,8 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
             int offset = y;
             for (int x=0; x<srcWidth; ++x)
             {
-                buffer[offset] = pSrc[-x];
-                offset += srcHeight;
+                pDst[offset] = pSrc[-x];
+                offset += dstPitch;
             }
             pSrc += srcPitch;
         }
@@ -278,27 +256,19 @@ void turnPlaneLeft(BYTE* pDst, const BYTE* pSrc, BYTE* buffer, int srcWidth, int
         pSrc += srcWidth-1;
         for(int y=0; y<srcHeight; ++y)
         {
-            int offset = y+srcHeight*srcWidthMod8;
+            int offset = y+dstPitch*srcWidthMod8;
             for (int x=srcWidthMod8; x<srcWidth; ++x)
             {
-                buffer[offset] = pSrc[-x];
-                offset += srcHeight;
+                pDst[offset] = pSrc[-x];
+                offset += dstPitch;
             }
             pSrc += srcPitch;
-        }
-    }
-
-    if (useBuffer) {
-        for (int y = 0; y < srcWidth; ++y) {
-            memcpy(pDst2, buffer, srcHeight);
-            pDst2 += dstPitch;
-            buffer += srcHeight;
         }
     }
 }
 
 template<InstructionSet level>
-void turnPlane180(BYTE* pDst, const BYTE* pSrc, BYTE*, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
+void turnPlane180(BYTE* pDst, const BYTE* pSrc, int srcWidth, int srcHeight, int dstPitch, int srcPitch) {
     BYTE* pDst2 = pDst;
     const BYTE* pSrc2 = pSrc;
     int srcWidthMod16 = (srcWidth / 16) * 16;
@@ -352,20 +322,14 @@ public:
     FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env);
     PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env);
 
-    ~FTurn() {
-        delete [] buffer;
-    }
-
 private:
     bool chroma_;
     bool mt_;
     decltype(turnPlane180SSE2) turnFunction_;
-    BYTE *buffer;
-    BYTE *bufferUV;
 };
 
 FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScriptEnvironment* env) 
-    : GenericVideoFilter(child), chroma_(chroma), mt_(mt), buffer(nullptr), bufferUV(nullptr) {
+    : GenericVideoFilter(child), chroma_(chroma), mt_(mt) {
     if (!isSupportedColorspace(vi.pixel_type)) {
         env->ThrowError(getUnsupportedColorspaceMessage());
     }
@@ -390,12 +354,6 @@ FTurn::FTurn(PClip child, TurnDirection direction, bool chroma, bool mt, IScript
         } else {
             turnFunction_ = ssse3 ? turnPlaneRightSSSE3 : turnPlaneRightSSE2;
         }
-
-        buffer = new BYTE[vi.width*vi.height];
-
-        if (mt_) {
-            bufferUV = new BYTE[vi.width*vi.height];
-        }
     } else {
         turnFunction_ = ssse3 ? turnPlane180SSSE3 : turnPlane180SSE2;
     }
@@ -412,7 +370,7 @@ PVideoFrame FTurn::GetFrame(int n, IScriptEnvironment* env) {
     int srcHeightY = src->GetHeight(PLANAR_Y);
 
     if (!(chroma_ && hasChroma(vi.pixel_type))) {
-        turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+        turnFunction_(pDstY, pSrcY, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
     } else {
         auto pDstU = dst->GetWritePtr(PLANAR_U);
         auto pDstV = dst->GetWritePtr(PLANAR_V);
@@ -425,15 +383,15 @@ PVideoFrame FTurn::GetFrame(int n, IScriptEnvironment* env) {
         
         if (mt_) {
             auto thread2 = std::async(launch::async, [=] { 
-                turnFunction_(pDstU, pSrcU, bufferUV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
-                turnFunction_(pDstV, pSrcV, bufferUV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+                turnFunction_(pDstU, pSrcU, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+                turnFunction_(pDstV, pSrcV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
             });
-            turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+            turnFunction_(pDstY, pSrcY, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
             thread2.wait();
         } else {
-            turnFunction_(pDstU, pSrcU, buffer, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
-            turnFunction_(pDstV, pSrcV, buffer, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
-            turnFunction_(pDstY, pSrcY, buffer, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
+            turnFunction_(pDstU, pSrcU, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+            turnFunction_(pDstV, pSrcV, srcWidthUV, srcHeightUV, dstPitchUV, srcPitchUV);
+            turnFunction_(pDstY, pSrcY, srcWidthY, srcHeightY, dstPitchY, srcPitchY);
         }
     }
     return dst;
