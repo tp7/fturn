@@ -284,11 +284,13 @@ void turnPlane180(BYTE* pDst, const BYTE* pSrc, int srcWidth, int srcHeight, int
             auto src = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pSrc+x));
 
             if (level == InstructionSet::SSE2) {
-                auto low = _mm_unpacklo_epi8(src, zero);
-                auto high = _mm_unpackhi_epi8(src, zero);
-                low = rotateEpi16(low);
-                high = rotateEpi16(high);
-                src = _mm_packus_epi16(high, low);
+                //15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0
+                src = _mm_shuffle_epi32(src, _MM_SHUFFLE(0, 1, 2, 3)); //3 2 1 0 7 6 5 4 11 10 9 8 15 14 13 12 
+                src = _mm_shufflelo_epi16(src, _MM_SHUFFLE(2, 3, 0, 1));
+                src = _mm_shufflehi_epi16(src, _MM_SHUFFLE(2, 3, 0, 1)); //1 0 3 2 5 4 7 6 9 8 11 10 13 12 15 14
+                auto t1 = _mm_slli_epi16(src, 8); 
+                auto t2 = _mm_srli_epi16(src, 8); 
+                src = _mm_or_si128(t1, t2);
             } else { 
                 src = _mm_shuffle_epi8(src, pshufbMask);
             }
